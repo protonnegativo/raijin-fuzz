@@ -1,0 +1,27 @@
+[2K.env                    [Status: 200, Size: 68, Words: 1, Lines: 4, Duration: 2ms][0m
+[2K.git/config             [Status: 200, Size: 90, Words: 6, Lines: 5, Duration: 0ms][0m
+[2K.htpasswd               [Status: 403, Size: 45, Words: 1, Lines: 2, Duration: 3ms][0m
+[2Kadmin                   [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2K.htaccess               [Status: 403, Size: 45, Words: 1, Lines: 2, Duration: 0ms][0m
+[2Kbackup                  [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kapi                     [Status: 401, Size: 25, Words: 2, Lines: 1, Duration: 0ms][0m
+[2Kbackup.sql              [Status: 200, Size: 980, Words: 141, Lines: 41, Duration: 0ms][0m
+[2Kdashboard               [Status: 302, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kbackup.tar.gz           [Status: 200, Size: 902, Words: 1, Lines: 1, Duration: 1ms][0m
+[2Kconfig.php.bak          [Status: 200, Size: 40, Words: 5, Lines: 2, Duration: 0ms][0m
+[2Kserver-status           [Status: 403, Size: 45, Words: 1, Lines: 2, Duration: 0ms][0m
+[2Kdebug                   [Status: 500, Size: 233, Words: 14, Lines: 7, Duration: 0ms][0m
+[2Klogin                   [Status: 200, Size: 241, Words: 11, Lines: 7, Duration: 1ms][0m
+[2Kphpinfo.php             [Status: 200, Size: 218, Words: 6, Lines: 7, Duration: 0ms][0m
+[2Kuploads                 [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 1ms][0m
+[2Kimages                  [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Krobots.txt              [Status: 200, Size: 36, Words: 3, Lines: 3, Duration: 0ms][0m
+[2Kcss                     [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kswagger.json            [Status: 200, Size: 67, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kjs                      [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kstatic                  [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 0ms][0m
+[2Kcontact                 [Status: 200, Size: 175, Words: 7, Lines: 7, Duration: 0ms][0m
+[2Kabout                   [Status: 200, Size: 174, Words: 7, Lines: 7, Duration: 1ms][0m
+[2Kindex.html              [Status: 200, Size: 165, Words: 5, Lines: 7, Duration: 0ms][0m
+[2Kreport                  [Status: 200, Size: 197, Words: 9, Lines: 7, Duration: 1502ms][0m
+[2Kadmin                   [Status: 301, Size: 0, Words: 1, Lines: 1, Duration: 5ms][0m
