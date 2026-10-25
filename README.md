@@ -42,7 +42,9 @@ Against ffuf's text output (stdout only, what an agent gets with `2>/dev/null`),
 go install github.com/protonnegativo/raijin-fuzz/cmd/raijin-fuzz@latest
 ```
 
-You also need `ffuf` on `PATH`, or pass `--ffuf <path>`.
+`@latest` installs the latest release. You also need `ffuf` on `PATH`, or pass `--ffuf <path>`.
+
+**Versions.** Releases are tagged automatically on every change and every passing engine update. `raijin-fuzz --version` shows the release and the tested engine version (`raijin-fuzz v0.1.3 (tested with ffuf 2.1.0)`). `raijin-mcp update` updates every Raijin tool at once.
 
 ## Usage
 
@@ -189,7 +191,7 @@ The Raijin banner is **off by default**, so normal runs stay small. `--banner` p
 
 ## Engine versions
 
-The ffuf version raijin-fuzz is tested with is in [engines.json](engines.json), built into the binary. When the installed ffuf has another major version or an older one, the output says so in `errors` (`engine_version`, with the install command); when ffuf's results lack the fields raijin-fuzz reads (`url`, `status`), it reports `engine_format` and counts them in `omitted.unparsed`. Neither changes the exit code. A weekly GitHub Actions job runs the live benchmark with the latest ffuf and opens a PR to bump engines.json when it passes, or an `engine-drift` issue when it breaks.
+The ffuf version raijin-fuzz is tested with is in [engines.json](engines.json), built into the binary. When the installed ffuf has another major version or an older one, the output says so in `errors` (`engine_version`, with the install command); when ffuf's results lack the fields raijin-fuzz reads (`url`, `status`), it reports `engine_format` and counts them in `omitted.unparsed`. Neither changes the exit code. A weekly GitHub Actions job runs the live benchmark with the latest ffuf and, when it passes with a newer ffuf, commits the bump and tags a release; when it breaks, it opens an `engine-drift` issue.
 
 ## Development
 

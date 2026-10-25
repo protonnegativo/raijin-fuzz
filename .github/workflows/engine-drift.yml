@@ -1,7 +1,7 @@
 name: engine drift
 
-# Weekly: install the latest ffuf, run the LIVE benchmark against the local lab, and open a PR that bumps
-# engines.json when it passes, or an issue when it breaks.
+# Weekly: install the latest ffuf, run the LIVE benchmark against the local lab, and when it passes with
+# a newer ffuf, commit the engines.json bump and tag a release; open an issue when it breaks.
 on:
   schedule:
     - cron: "0 6 * * 1"
@@ -14,7 +14,6 @@ on:
 permissions:
   contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   drift:
@@ -25,6 +24,8 @@ jobs:
       WANT: ${{ inputs.ffuf || 'latest' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -87,7 +88,8 @@ jobs:
           else
             gh issue create --title "Engine drift: ffuf ${INSTALLED:-unknown}" --label engine-drift --body-file "$RUNNER_TEMP/issue.md"
           fi
-      - name: Open or update the bump PR
+      - name: Commit the bump and release
+        id: bump
         if: success()
         env:
           INSTALLED: ${{ steps.versions.outputs.installed }}
@@ -96,7 +98,6 @@ jobs:
           [ -n "$INSTALLED" ] || { echo "ffuf -V printed no version"; exit 0; }
           newer=$(python3 -c 'import sys; t=lambda s: tuple(map(int, s.split("."))); print(int(t(sys.argv[1]) > t(sys.argv[2])))' "$INSTALLED" "$TESTED")
           [ "$newer" = 1 ] || { echo "ffuf $INSTALLED is not newer than the tested $TESTED"; exit 0; }
-          branch=engine-bump/ffuf-$INSTALLED
           python3 - "$INSTALLED" <<'PY'
           import json, sys
           p = "engines.json"
@@ -105,24 +106,23 @@ jobs:
           lines = ",\n".join("  " + json.dumps(k) + ": " + json.dumps(v) for k, v in m.items())
           open(p, "w").write("{\n" + lines + "\n}\n")
           PY
-          # the refreshed fixtures stay out of the PR: BENCHMARK.md numbers come from the committed ones
+          # the refreshed fixtures stay out of the commit: BENCHMARK.md numbers come from the committed ones
           git checkout -- bench/fixtures
+          if ! go test ./... > "$RUNNER_TEMP/gotest.log" 2>&1; then
+            { echo "go test ./... fails with engines.json at ffuf $INSTALLED:"; tail -40 "$RUNNER_TEMP/gotest.log"; } >> "$RUNNER_TEMP/verify.txt"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$branch"
           git commit -am "Test with ffuf $INSTALLED"
-          git push -f origin "$branch"
-          {
-            echo "ffuf $TESTED -> $INSTALLED"
-            echo
-            echo '```'
-            cat "$RUNNER_TEMP/verify.txt"
-            echo '```'
-            echo
-            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (LIVE workdir in the live-bench artifact)"
-          } > "$RUNNER_TEMP/pr.md"
-          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
-            gh pr edit "$branch" --title "Test with ffuf $INSTALLED" --body-file "$RUNNER_TEMP/pr.md"
-          else
-            gh pr create --head "$branch" --title "Test with ffuf $INSTALLED" --body-file "$RUNNER_TEMP/pr.md"
-          fi
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          # a push made with GITHUB_TOKEN does not trigger release.yml, so tag here
+          .github/release.sh patch
+      - name: Close the drift issue
+        if: success()
+        env:
+          INSTALLED: ${{ steps.versions.outputs.installed }}
+        run: |
+          for n in $(gh issue list --label engine-drift --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Passes with ffuf $INSTALLED: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          done

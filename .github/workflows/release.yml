@@ -1,0 +1,34 @@
+name: release
+
+# Tags every change to the binary as a new release (patch by default) and creates its GitHub Release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: which part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUMP: ${{ inputs.bump || 'patch' }}
+          # the push's previous HEAD; a manual run always releases
+          BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          case "$BASE" in 0000000000000000000000000000000000000000) BASE= ;; esac
+          .github/release.sh "$BUMP" "$BASE"
