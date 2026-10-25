@@ -3,11 +3,68 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
+
+	"github.com/protonnegativo/raijin-fuzz"
 )
+
+// testedFfuf is the ffuf version in engines.json, so fake engines answer with it and a bump does not
+// break the tests.
+func testedFfuf(t *testing.T) (string, [3]int) {
+	t.Helper()
+	tested, err := engines.Tested()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := tested["ffuf"].Version
+	p, ok := engines.Parse(v)
+	if !ok {
+		t.Fatalf("tested ffuf %q does not parse", v)
+	}
+	return v, p
+}
+
+func TestBuildVersion(t *testing.T) {
+	cases := []struct {
+		info *debug.BuildInfo
+		ok   bool
+		want string
+	}{
+		{nil, false, "dev"},
+		{&debug.BuildInfo{Main: debug.Module{Version: "v0.1.3"}}, true, "v0.1.3"},
+		{&debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}, true, "dev"},
+		{&debug.BuildInfo{Main: debug.Module{Version: "(devel)"}, Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "0123456789abcdef0123"}, {Key: "vcs.modified", Value: "true"}}}, true, "dev-0123456789ab+dirty"},
+		{&debug.BuildInfo{Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "abc"}, {Key: "vcs.modified", Value: "false"}}}, true, "dev-abc"},
+		{&debug.BuildInfo{Main: debug.Module{Version: "v0.0.0-20261025032211-072939d7ec47+dirty"}, Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "072939d7ec47aaaa"}, {Key: "vcs.modified", Value: "true"}}}, true, "dev-072939d7ec47+dirty"},
+		{&debug.BuildInfo{Main: debug.Module{Version: "v0.1.3"}, Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "072939d7ec47aaaa"}}}, true, "v0.1.3"},
+	}
+	for _, c := range cases {
+		if got := buildVersion(c.info, c.ok); got != c.want {
+			t.Errorf("buildVersion(%+v) = %q, want %q", c.info, got, c.want)
+		}
+	}
+}
+
+func TestVersionLine(t *testing.T) {
+	tested, _ := testedFfuf(t)
+	var out, errb bytes.Buffer
+	if code := run([]string{"--version"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	want := "raijin-fuzz " + version + " (tested with ffuf " + tested + ")\n"
+	if out.String() != want {
+		t.Errorf("--version = %q, want %q", out.String(), want)
+	}
+}
 
 func scopeFile(t *testing.T) string {
 	t.Helper()
@@ -39,7 +96,7 @@ func TestBannerGoesToStderrOnly(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(errb.String(), "TGT-LOCK") || !strings.Contains(errb.String(), "raijin-fuzz v"+version) {
+	if !strings.Contains(errb.String(), "TGT-LOCK") || !strings.Contains(errb.String(), "raijin-fuzz v"+strings.TrimPrefix(version, "v")) {
 		t.Errorf("banner missing or without the version: %q", errb.String())
 	}
 	if strings.Contains(out.String(), "TGT-LOCK") {
@@ -211,7 +268,19 @@ func TestEngineVersionWarnsAndDoesNotBlock(t *testing.T) {
 	if err := os.WriteFile(scopePath, []byte("h.test\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for version, warn := range map[string]bool{"1.5.0": true, "2.0.0": true, "2.1.0": false, "2.9.1-dev": false, "dev": false} {
+	tested, p := testedFfuf(t)
+	older := fmt.Sprintf("%d.%d.%d", p[0], p[1], p[2]-1)
+	if p[2] == 0 {
+		older = fmt.Sprintf("%d.%d.%d", p[0]-1, 9, 9)
+	}
+	cases := map[string]bool{
+		older:                                    true,
+		fmt.Sprintf("%d.0.0", p[0]+1):            true,
+		tested:                                   false,
+		fmt.Sprintf("%d.%d.1-dev", p[0], p[1]+1): false,
+		"dev":                                    false,
+	}
+	for version, warn := range cases {
 		fake := filepath.Join(dir, "ffuf")
 		script := "#!/bin/sh\n[ \"$1\" = -V ] && { echo 'ffuf version: " + version + "'; exit 0; }\nwhile [ $# -gt 0 ]; do\n" +
 			"  [ \"$1\" = -o ] && echo '{\"results\":[],\"config\":{\"url\":\"http://h.test/FUZZ\"}}' > \"$2\"\n  shift\ndone\n"
@@ -224,7 +293,7 @@ func TestEngineVersionWarnsAndDoesNotBlock(t *testing.T) {
 			t.Fatalf("%s: exit %d: %s", version, code, errb.String())
 		}
 		got := strings.Contains(out.String(), `"kind":"engine_version"`)
-		if got != warn || (warn && !strings.Contains(out.String(), "go install github.com/ffuf/ffuf/v2@v2.1.0")) {
+		if got != warn || (warn && !strings.Contains(out.String(), "go install github.com/ffuf/ffuf/v2@v"+tested)) {
 			t.Errorf("%s: warned %v, want %v: %s", version, got, warn, out.String())
 		}
 	}

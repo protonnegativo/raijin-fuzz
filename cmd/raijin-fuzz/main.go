@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"regexp"
+	"runtime/debug"
 	"strings"
 
 	"github.com/protonnegativo/raijin-fuzz"
@@ -21,7 +23,56 @@ import (
 	"github.com/protonnegativo/raijin-fuzz/internal/state"
 )
 
-const version = "0.1.0"
+// version is the release the binary was installed as (go install ...@vX.Y.Z or @latest), or dev plus
+// the VCS revision for a local build.
+var version = buildVersion(debug.ReadBuildInfo())
+
+var pseudoRe = regexp.MustCompile(`-(0\.)?[0-9]{14}-[0-9a-f]{12}(\+dirty)?$`)
+
+// buildVersion returns the module version from the build info when it is a real one, else "dev", with
+// the first 12 characters of vcs.revision and "+dirty" when vcs.modified is true.
+func buildVersion(info *debug.BuildInfo, ok bool) string {
+	if !ok || info == nil {
+		return "dev"
+	}
+	var rev string
+	var dirty bool
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			dirty = s.Value == "true"
+		}
+	}
+	// go install from the module proxy has no vcs settings; a local go build (Go 1.24+) stamps a
+	// pseudo-version from the checkout, which is not a release.
+	if v := info.Main.Version; v != "" && v != "(devel)" && (rev == "" || !pseudoRe.MatchString(v)) {
+		return v
+	}
+	v := "dev"
+	if len(rev) > 12 {
+		rev = rev[:12]
+	}
+	if rev != "" {
+		v += "-" + rev
+	}
+	if dirty {
+		v += "+dirty"
+	}
+	return v
+}
+
+// versionLine is what --version prints: the release and the engine versions it is tested with.
+func versionLine() string {
+	line := "raijin-fuzz " + version
+	if tested, err := engines.Tested(); err == nil {
+		if e, ok := tested["ffuf"]; ok {
+			line += " (tested with ffuf " + e.Version + ")"
+		}
+	}
+	return line
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -55,10 +106,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if *showBanner {
-		banner.Write(stderr, "raijin-fuzz", version, useColor(stderr))
+		banner.Write(stderr, "raijin-fuzz", strings.TrimPrefix(version, "v"), useColor(stderr))
 	}
 	if *showVersion {
-		fmt.Fprintln(stdout, "raijin-fuzz", version)
+		fmt.Fprintln(stdout, versionLine())
 		return 0
 	}
 	if *scopeFile == "" {
@@ -177,7 +228,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		})
 		switch {
 		case errors.Is(err, ffuf.ErrNotFound):
-			res.Errors = append(res.Errors, schema.Error{Kind: "missing_engine", Hint: "install ffuf (go install github.com/ffuf/ffuf/v2@latest) or pass --ffuf <path>"})
+			res.Errors = append(res.Errors, schema.Error{Kind: "missing_engine", Hint: "install ffuf (go install github.com/ffuf/ffuf/v2@latest) or pass --ffuf <path>, or run raijin-mcp update"})
 			res.Summary = "ffuf not found, nothing fuzzed"
 			res.Raw = ""
 			if tempRaw {
@@ -268,7 +319,7 @@ func versionError(out string) *schema.Error {
 		return nil
 	}
 	v := fmt.Sprintf("%d.%d.%d", installed[0], installed[1], installed[2])
-	return &schema.Error{Kind: "engine_version", Hint: fmt.Sprintf("ffuf %s is not the tested %s; results may be incomplete. Install the tested version: %s", v, e.Version, e.Install(e.Version))}
+	return &schema.Error{Kind: "engine_version", Hint: fmt.Sprintf("ffuf %s is not the tested %s; results may be incomplete. Install the tested version: %s, or run raijin-mcp update", v, e.Version, e.Install(e.Version))}
 }
 
 // formatError warns when ffuf wrote results without a url or status (or lines that are not JSON): its
