@@ -1,0 +1,128 @@
+name: engine drift
+
+# Weekly: install the latest ffuf, run the LIVE benchmark against the local lab, and open a PR that bumps
+# engines.json when it passes, or an issue when it breaks.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      ffuf:
+        description: ffuf version to test (latest, or X.Y.Z)
+        default: latest
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WANT: ${{ inputs.ffuf || 'latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install ffuf
+        run: |
+          mod=$(python3 -c 'import json; print(json.load(open("engines.json"))["ffuf"]["go"])')
+          v=$WANT
+          case "$v" in latest|v*) ;; *) v=v$v ;; esac
+          go install "$mod@$v"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Installed versions
+        id: versions
+        run: |
+          ffuf -V
+          installed=$(ffuf -V 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          tested=$(python3 -c 'import json; print(json.load(open("engines.json"))["ffuf"]["version"])')
+          echo "installed=$installed" >> "$GITHUB_OUTPUT"
+          echo "tested=$tested" >> "$GITHUB_OUTPUT"
+      - run: pip install tiktoken
+      - name: LIVE benchmark
+        env:
+          LIVE: "1"
+          PY: python3
+        run: |
+          W=$RUNNER_TEMP/live
+          set +e
+          bench/run.sh "$W" > "$RUNNER_TEMP/bench.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/bench.log"
+          grep ' missing from output' "$RUNNER_TEMP/bench.log" > "$RUNNER_TEMP/verify.txt" || true
+          grep -l '"engine_format"' "$W"/*.json "$W"/*/*.json >> "$RUNNER_TEMP/verify.txt" 2>/dev/null && echo "engine_format error in the files above" >> "$RUNNER_TEMP/verify.txt"
+          [ "$rc" = 0 ] || { echo "bench/run.sh exited $rc" >> "$RUNNER_TEMP/verify.txt"; exit 1; }
+          [ -s "$RUNNER_TEMP/verify.txt" ] || { echo "no verify lines" >> "$RUNNER_TEMP/verify.txt"; exit 1; }
+          ! grep -qE '[1-9][0-9]* missing from output|engine_format' "$RUNNER_TEMP/verify.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-bench
+          path: ${{ runner.temp }}/live
+          retention-days: 14
+      - name: Open or update the drift issue
+        if: failure()
+        env:
+          INSTALLED: ${{ steps.versions.outputs.installed }}
+        run: |
+          gh label create engine-drift --color B60205 --description "An engine update breaks raijin-fuzz" 2>/dev/null || true
+          {
+            echo "The weekly engine drift run failed with ffuf ${INSTALLED:-unknown}."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/verify.txt" 2>/dev/null || echo "(no verify output)"
+            echo '```'
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/issue.md"
+          n=$(gh issue list --label engine-drift --state open --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --title "Engine drift: ffuf ${INSTALLED:-unknown}" --label engine-drift --body-file "$RUNNER_TEMP/issue.md"
+          fi
+      - name: Open or update the bump PR
+        if: success()
+        env:
+          INSTALLED: ${{ steps.versions.outputs.installed }}
+          TESTED: ${{ steps.versions.outputs.tested }}
+        run: |
+          [ -n "$INSTALLED" ] || { echo "ffuf -V printed no version"; exit 0; }
+          newer=$(python3 -c 'import sys; t=lambda s: tuple(map(int, s.split("."))); print(int(t(sys.argv[1]) > t(sys.argv[2])))' "$INSTALLED" "$TESTED")
+          [ "$newer" = 1 ] || { echo "ffuf $INSTALLED is not newer than the tested $TESTED"; exit 0; }
+          branch=engine-bump/ffuf-$INSTALLED
+          python3 - "$INSTALLED" <<'PY'
+          import json, sys
+          p = "engines.json"
+          m = json.load(open(p))
+          m["ffuf"]["version"] = sys.argv[1]
+          lines = ",\n".join("  " + json.dumps(k) + ": " + json.dumps(v) for k, v in m.items())
+          open(p, "w").write("{\n" + lines + "\n}\n")
+          PY
+          # the refreshed fixtures stay out of the PR: BENCHMARK.md numbers come from the committed ones
+          git checkout -- bench/fixtures
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git commit -am "Test with ffuf $INSTALLED"
+          git push -f origin "$branch"
+          {
+            echo "ffuf $TESTED -> $INSTALLED"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/verify.txt"
+            echo '```'
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (LIVE workdir in the live-bench artifact)"
+          } > "$RUNNER_TEMP/pr.md"
+          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
+            gh pr edit "$branch" --title "Test with ffuf $INSTALLED" --body-file "$RUNNER_TEMP/pr.md"
+          else
+            gh pr create --head "$branch" --title "Test with ffuf $INSTALLED" --body-file "$RUNNER_TEMP/pr.md"
+          fi
