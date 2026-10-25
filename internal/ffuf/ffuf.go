@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrNotFound is returned when the ffuf binary is not on PATH.
@@ -53,7 +54,18 @@ type Run struct {
 	// Errors is the number of requests that failed (timeouts, refused connections), from ffuf's last
 	// progress line. Those inputs have no result. It is only known when Raijin ran ffuf.
 	Errors int
+	// Lines is the number of results (or, in the -json stream, non-empty lines) ffuf wrote, and
+	// Unparsed how many of them had no url or status (or were not JSON): they are not in Results.
+	Lines, Unparsed int
 }
+
+// essential is what a result needs to be one: Parse counts results without these fields in Unparsed.
+type essential struct {
+	URL    string `json:"url"`
+	Status *int   `json:"status"`
+}
+
+func (e essential) ok() bool { return e.URL != "" && e.Status != nil }
 
 type file struct {
 	Results []Result `json:"results"`
@@ -73,7 +85,7 @@ type file struct {
 
 // Parse reads ffuf output: the JSON file of -of json -o (one object with results and config), or the
 // JSON lines of -json, where ffuf writes the input values in base64. Lines that are not results are
-// skipped.
+// skipped and counted in Unparsed.
 func Parse(r io.Reader) (*Run, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -81,8 +93,17 @@ func Parse(r io.Reader) (*Run, error) {
 	}
 	run := &Run{}
 	var f file
+	var raw struct {
+		Results []essential `json:"results"`
+	}
 	if trimmed := bytes.TrimSpace(data); len(trimmed) > 0 && json.Unmarshal(trimmed, &f) == nil && (f.Config != nil || f.Results != nil) {
-		for _, res := range f.Results {
+		_ = json.Unmarshal(trimmed, &raw)
+		for i, res := range f.Results {
+			run.Lines++
+			if i < len(raw.Results) && !raw.Results[i].ok() {
+				run.Unparsed++
+				continue
+			}
 			run.Results = append(run.Results, clean(res, false))
 		}
 		if c := f.Config; c != nil {
@@ -106,11 +127,14 @@ func Parse(r io.Reader) (*Run, error) {
 		sc.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
 		for sc.Scan() {
 			line := bytes.TrimSpace(sc.Bytes())
-			if len(line) == 0 || line[0] != '{' {
+			if len(line) == 0 {
 				continue
 			}
+			run.Lines++
 			var res Result
-			if json.Unmarshal(line, &res) != nil || res.URL == "" {
+			var e essential
+			if json.Unmarshal(line, &res) != nil || json.Unmarshal(line, &e) != nil || !e.ok() {
+				run.Unparsed++
 				continue
 			}
 			run.Results = append(run.Results, clean(res, true))
@@ -261,6 +285,18 @@ func Errors(stderr string) int {
 	}
 	n, _ := strconv.Atoi(m[len(m)-1][1])
 	return n
+}
+
+// Version runs ffuf -V (it prints "ffuf version: 2.1.0") and returns its output, or "" when it fails
+// or takes longer than 3 seconds.
+func Version(ctx context.Context, bin string) string {
+	if bin == "" {
+		bin = "ffuf"
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, _ := exec.CommandContext(ctx, bin, "-V").CombinedOutput()
+	return string(out)
 }
 
 // tailBuffer keeps the last max bytes written to it: ffuf rewrites its progress line many times a

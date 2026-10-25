@@ -1,0 +1,399 @@
+{
+  "commandline": "ffuf -u https://app.example.com/FUZZ -w words.txt -of json -o sample.json",
+  "time": "2026-10-24T20:00:00-03:00",
+  "results": [
+    {
+      "input": {
+        "FFUFHASH": "abc001",
+        "FUZZ": "about"
+      },
+      "position": 1,
+      "status_code": 200,
+      "length": 145,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/about",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc002",
+        "FUZZ": "blog"
+      },
+      "position": 2,
+      "status_code": 200,
+      "length": 144,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/blog",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc003",
+        "FUZZ": "cart"
+      },
+      "position": 3,
+      "status_code": 200,
+      "length": 144,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/cart",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc004",
+        "FUZZ": "docs"
+      },
+      "position": 4,
+      "status_code": 200,
+      "length": 144,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/docs",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc005",
+        "FUZZ": "help"
+      },
+      "position": 5,
+      "status_code": 200,
+      "length": 144,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/help",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc006",
+        "FUZZ": "news"
+      },
+      "position": 6,
+      "status_code": 200,
+      "length": 144,
+      "words": 11,
+      "lines": 6,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/news",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc007",
+        "FUZZ": "index.php"
+      },
+      "position": 7,
+      "status_code": 403,
+      "length": 104,
+      "words": 8,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/index.php",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc008",
+        "FUZZ": "login.php"
+      },
+      "position": 8,
+      "status_code": 403,
+      "length": 104,
+      "words": 8,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/login.php",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc009",
+        "FUZZ": "info.php"
+      },
+      "position": 9,
+      "status_code": 403,
+      "length": 104,
+      "words": 8,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/info.php",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc010",
+        "FUZZ": "test.php"
+      },
+      "position": 10,
+      "status_code": 403,
+      "length": 104,
+      "words": 8,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/test.php",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc011",
+        "FUZZ": "shell.php"
+      },
+      "position": 11,
+      "status_code": 403,
+      "length": 104,
+      "words": 8,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/shell.php",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc012",
+        "FUZZ": ".env"
+      },
+      "position": 12,
+      "status_code": 200,
+      "length": 68,
+      "words": 1,
+      "lines": 4,
+      "content-type": "text/plain",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/.env",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc013",
+        "FUZZ": "admin"
+      },
+      "position": 13,
+      "status_code": 301,
+      "length": 0,
+      "words": 1,
+      "lines": 1,
+      "content-type": "",
+      "redirectlocation": "/admin/",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/admin",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc014",
+        "FUZZ": "backup"
+      },
+      "position": 14,
+      "status_code": 301,
+      "length": 0,
+      "words": 1,
+      "lines": 1,
+      "content-type": "",
+      "redirectlocation": "/backup/",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/backup",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc015",
+        "FUZZ": "api"
+      },
+      "position": 15,
+      "status_code": 401,
+      "length": 25,
+      "words": 2,
+      "lines": 1,
+      "content-type": "application/json",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/api",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc016",
+        "FUZZ": ".htpasswd"
+      },
+      "position": 16,
+      "status_code": 403,
+      "length": 45,
+      "words": 1,
+      "lines": 2,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/.htpasswd",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc017",
+        "FUZZ": "report"
+      },
+      "position": 17,
+      "status_code": 200,
+      "length": 197,
+      "words": 9,
+      "lines": 7,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 1500000000,
+      "resultfile": "",
+      "url": "https://app.example.com/report",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc018",
+        "FUZZ": "dashboard"
+      },
+      "position": 18,
+      "status_code": 302,
+      "length": 0,
+      "words": 1,
+      "lines": 1,
+      "content-type": "",
+      "redirectlocation": "/login?next=/dashboard",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/dashboard",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc019",
+        "FUZZ": "robots.txt"
+      },
+      "position": 19,
+      "status_code": 200,
+      "length": 36,
+      "words": 3,
+      "lines": 3,
+      "content-type": "text/plain",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/robots.txt",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc020",
+        "FUZZ": ".env"
+      },
+      "position": 20,
+      "status_code": 200,
+      "length": 68,
+      "words": 1,
+      "lines": 4,
+      "content-type": "text/plain",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://app.example.com/.env",
+      "host": "app.example.com"
+    },
+    {
+      "input": {
+        "FFUFHASH": "abc021",
+        "FUZZ": "x"
+      },
+      "position": 21,
+      "status_code": 200,
+      "length": 10,
+      "words": 1,
+      "lines": 1,
+      "content-type": "text/html; charset=utf-8",
+      "redirectlocation": "",
+      "scraper": {},
+      "duration": 3000000,
+      "resultfile": "",
+      "url": "https://evil.test/x",
+      "host": "app.example.com"
+    }
+  ],
+  "config": {
+    "url": "https://app.example.com/FUZZ",
+    "autocalibration": false,
+    "matchers": {
+      "IsCalibrated": false,
+      "Mutex": {},
+      "Matchers": {
+        "status_code": {
+          "value": "200-299,301,302,307,401,403,405,500"
+        }
+      },
+      "Filters": {},
+      "PerDomainFilters": {}
+    }
+  }
+}

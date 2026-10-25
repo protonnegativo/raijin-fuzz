@@ -187,6 +187,10 @@ The Raijin banner is **off by default**, so normal runs stay small. `--banner` p
 | `--ffuf` | ffuf | path to the binary |
 | `--banner` | false | print the banner to stderr |
 
+## Engine versions
+
+The ffuf version raijin-fuzz is tested with is in [engines.json](engines.json), built into the binary. When the installed ffuf has another major version or an older one, the output says so in `errors` (`engine_version`, with the install command); when ffuf's results lack the fields raijin-fuzz reads (`url`, `status`), it reports `engine_format` and counts them in `omitted.unparsed`. Neither changes the exit code. A weekly GitHub Actions job runs the live benchmark with the latest ffuf and opens a PR to bump engines.json when it passes, or an `engine-drift` issue when it breaks.
+
 ## Development
 
 ```bash

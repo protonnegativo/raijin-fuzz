@@ -103,3 +103,31 @@ func TestDefaultWordlistEmbedded(t *testing.T) {
 		t.Errorf("embedded wordlist has %d lines", n)
 	}
 }
+
+func TestParseRenamedField(t *testing.T) {
+	// sample.json with status renamed to status_code: an output format change must be counted
+	f, err := os.Open("testdata/renamed_status.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	run, err := Parse(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Lines != 21 || run.Unparsed != 21 || len(run.Results) != 0 {
+		t.Errorf("lines %d, unparsed %d, results %d", run.Lines, run.Unparsed, len(run.Results))
+	}
+	f2, _ := os.Open("../../testdata/sample.json")
+	defer f2.Close()
+	if run, _ := Parse(f2); run.Lines != 21 || run.Unparsed != 0 {
+		t.Errorf("sample: lines %d, unparsed %d", run.Lines, run.Unparsed)
+	}
+	stream := `{"input":{"FUZZ":"YQ=="},"status_code":200,"url":"http://h.test/a"}
+{"input":{"FUZZ":"Yg=="},"status":200,"url":"http://h.test/b"}
+not json
+`
+	if run, _ := Parse(strings.NewReader(stream)); run.Lines != 3 || run.Unparsed != 2 || len(run.Results) != 1 {
+		t.Errorf("stream: lines %d, unparsed %d, results %d", run.Lines, run.Unparsed, len(run.Results))
+	}
+}

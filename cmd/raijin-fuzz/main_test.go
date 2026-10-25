@@ -204,3 +204,46 @@ func TestScopeAloneFuzzesWhatTheScopeNames(t *testing.T) {
 		t.Errorf("next = %v", res.Next)
 	}
 }
+
+func TestEngineVersionWarnsAndDoesNotBlock(t *testing.T) {
+	dir := t.TempDir()
+	scopePath := filepath.Join(dir, "scope.txt")
+	if err := os.WriteFile(scopePath, []byte("h.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for version, warn := range map[string]bool{"1.5.0": true, "2.0.0": true, "2.1.0": false, "2.9.1-dev": false, "dev": false} {
+		fake := filepath.Join(dir, "ffuf")
+		script := "#!/bin/sh\n[ \"$1\" = -V ] && { echo 'ffuf version: " + version + "'; exit 0; }\nwhile [ $# -gt 0 ]; do\n" +
+			"  [ \"$1\" = -o ] && echo '{\"results\":[],\"config\":{\"url\":\"http://h.test/FUZZ\"}}' > \"$2\"\n  shift\ndone\n"
+		if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		code := run([]string{"--scope", scopePath, "--ffuf", fake, "-u", "http://h.test/FUZZ", "-w", fake, "--raw", filepath.Join(dir, "raw.json")}, &out, &errb)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", version, code, errb.String())
+		}
+		got := strings.Contains(out.String(), `"kind":"engine_version"`)
+		if got != warn || (warn && !strings.Contains(out.String(), "go install github.com/ffuf/ffuf/v2@v2.1.0")) {
+			t.Errorf("%s: warned %v, want %v: %s", version, got, warn, out.String())
+		}
+	}
+}
+
+func TestEngineFormatIsCounted(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopeFile(t), "--input", "../../internal/ffuf/testdata/renamed_status.json"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	var res struct {
+		Omitted map[string]int
+		Errors  []struct{ Kind, Hint string }
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Omitted["unparsed"] != 21 || len(res.Errors) != 1 || res.Errors[0].Kind != "engine_format" ||
+		!strings.HasPrefix(res.Errors[0].Hint, "21 of 21 ffuf results had no url or status") {
+		t.Errorf("omitted %v, errors %v", res.Omitted, res.Errors)
+	}
+}

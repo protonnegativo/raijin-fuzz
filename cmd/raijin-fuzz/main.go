@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/protonnegativo/raijin-fuzz"
 	"github.com/protonnegativo/raijin-fuzz/internal/banner"
 	"github.com/protonnegativo/raijin-fuzz/internal/ffuf"
 	"github.com/protonnegativo/raijin-fuzz/internal/reduce"
@@ -166,6 +167,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
+		if e := versionError(ffuf.Version(ctx, *bin)); e != nil {
+			res.Errors = append(res.Errors, *e)
+		}
 		var stderrTail string
 		fr, stderrTail, err = ffuf.Fuzz(ctx, ffuf.Options{
 			Binary: *bin, URL: url, Wordlist: words, Rate: *rate, Threads: *threads, Timeout: *timeout,
@@ -190,6 +194,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	if e := formatError(fr, res.Raw+*input); e != nil {
+		res.Errors = append(res.Errors, *e)
+		res.Omitted["unparsed"] += fr.Unparsed
+	}
 	if fr.Errors > 0 {
 		res.Errors = append(res.Errors, schema.Error{Kind: "request_errors", Hint: fmt.Sprintf("ffuf counted %d failed requests (timeouts, refused connections); those inputs have no result: lower --rate or --threads, or raise --timeout, and run again", fr.Errors)})
 	}
@@ -240,6 +248,36 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	write(stdout, &res, *format, *pretty)
 	return 0
+}
+
+// versionError warns when ffuf's version (the output of ffuf -V) is not the tested one in engines.json:
+// another major version, or an older one. An unparseable version says nothing: this check never fails
+// a run.
+func versionError(out string) *schema.Error {
+	tested, err := engines.Tested()
+	if err != nil {
+		return nil
+	}
+	e, ok := tested["ffuf"]
+	if !ok {
+		return nil
+	}
+	installed, ok1 := engines.Parse(out)
+	want, ok2 := engines.Parse(e.Version)
+	if !ok1 || !ok2 || !engines.Untested(installed, want) {
+		return nil
+	}
+	v := fmt.Sprintf("%d.%d.%d", installed[0], installed[1], installed[2])
+	return &schema.Error{Kind: "engine_version", Hint: fmt.Sprintf("ffuf %s is not the tested %s; results may be incomplete. Install the tested version: %s", v, e.Version, e.Install(e.Version))}
+}
+
+// formatError warns when ffuf wrote results without a url or status (or lines that are not JSON): its
+// output format may have changed. raw is where the full output is.
+func formatError(fr *ffuf.Run, raw string) *schema.Error {
+	if fr == nil || fr.Unparsed == 0 {
+		return nil
+	}
+	return &schema.Error{Kind: "engine_format", Hint: fmt.Sprintf("%d of %d ffuf results had no url or status; the engine's output format may have changed. Read %s for the full output", fr.Unparsed, fr.Lines, raw)}
 }
 
 // useColor is true when w is a terminal and NO_COLOR is not set.
