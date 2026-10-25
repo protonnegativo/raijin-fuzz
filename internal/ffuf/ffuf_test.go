@@ -89,3 +89,17 @@ func TestErrorsFromProgress(t *testing.T) {
 		t.Errorf("tail buffer = %q", b.String())
 	}
 }
+
+func TestDefaultWordlistEmbedded(t *testing.T) {
+	saved := SecListsCommon
+	SecListsCommon = nil
+	defer func() { SecListsCommon = saved }()
+	p, temp, err := DefaultWordlist(t.TempDir())
+	if err != nil || !temp {
+		t.Fatal(err, temp)
+	}
+	b, _ := os.ReadFile(p)
+	if n := strings.Count(string(b), "\n"); n != 100 || !strings.Contains(string(b), "\nadmin\n") {
+		t.Errorf("embedded wordlist has %d lines", n)
+	}
+}

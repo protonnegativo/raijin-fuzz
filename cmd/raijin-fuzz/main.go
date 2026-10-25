@@ -29,8 +29,8 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("raijin-fuzz", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	target := fs.String("u", "", "URL to fuzz, with the FUZZ keyword (ffuf -u)")
-	wordlist := fs.String("w", "", "wordlist (ffuf -w); more wordlists and keywords go after --")
+	target := fs.String("u", "", "URL to fuzz, with the FUZZ keyword (ffuf -u; default: https://<host>/FUZZ for every host the scope names)")
+	wordlist := fs.String("w", "", "wordlist (ffuf -w); more wordlists and keywords go after -- (default with no -u: SecLists common.txt if found, else a built-in list of 100 common paths)")
 	scopeFile := fs.String("scope", "", "scope file (required): domains, *.wildcards, IPs, CIDRs, !exclusions")
 	noise := fs.Int("noise", reduce.Defaults().Noise, "inputs with the same response shape that make it noise (a group)")
 	rate := fs.Int("rate", 0, "requests per second (ffuf -rate)")
@@ -47,7 +47,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := fs.Bool("version", false, "print the version")
 	showBanner := fs.Bool("banner", false, "print the Raijin banner to stderr (off by default to keep output small)")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "usage: raijin-fuzz --scope scope.txt (-u url/FUZZ -w words.txt | --input ffuf.json) [flags] [-- extra ffuf args]\n\n")
+		fmt.Fprintf(stderr, "usage: raijin-fuzz --scope scope.txt [-u url/FUZZ -w words.txt | --input ffuf.json] [flags] [-- extra ffuf args]\n\nWith no targets it fuzzes every host the scope names.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -96,15 +96,61 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		res.Target = *input
 	} else {
-		if *target == "" || *wordlist == "" {
-			fmt.Fprintln(stderr, "raijin-fuzz: -u and -w are required (or --input)")
-			return 1
+		url, words, extra := *target, *wordlist, fs.Args()
+		if *target == "" {
+			// no target given: fuzz https://<host>/FUZZ for every host the scope names, in one ffuf
+			// run with a second keyword (HOST) for the host
+			hosts, wildcards, ranges := sc.Targets()
+			for _, w := range wildcards {
+				res.Next = append(res.Next, "raijin-subs --scope "+*scopeFile+" -d "+strings.TrimPrefix(w, "*.")+", then raijin-fuzz -u <live host>/FUZZ to cover "+w)
+			}
+			for _, r := range ranges {
+				res.Next = append(res.Next, "raijin-ports --scope "+*scopeFile+" -host "+r+", then raijin-fuzz -u <open web port>/FUZZ to cover "+r)
+			}
+			if len(hosts) == 0 {
+				res.Summary = "the scope names no single host to fuzz"
+				res.Target = *scopeFile
+				write(stdout, &res, *format, *pretty)
+				return 1
+			}
+			hostList, err := os.CreateTemp("", "raijin-fuzz-hosts-*.txt")
+			if err != nil {
+				fmt.Fprintln(stderr, "raijin-fuzz:", err)
+				return 1
+			}
+			_, err = hostList.WriteString(strings.Join(hosts, "\n") + "\n")
+			hostList.Close()
+			defer os.Remove(hostList.Name())
+			if err != nil {
+				fmt.Fprintln(stderr, "raijin-fuzz:", err)
+				return 1
+			}
+			if words == "" {
+				p, temp, err := ffuf.DefaultWordlist("")
+				if err != nil {
+					fmt.Fprintln(stderr, "raijin-fuzz:", err)
+					return 1
+				}
+				if temp {
+					defer os.Remove(p)
+				}
+				words = p
+			}
+			url = "https://HOST/FUZZ"
+			words += ":FUZZ"
+			extra = append([]string{"-w", hostList.Name() + ":HOST"}, extra...)
+			res.Target = *scopeFile
+		} else {
+			if words == "" {
+				fmt.Fprintln(stderr, "raijin-fuzz: -w is required with -u (or --input)")
+				return 1
+			}
+			if !sc.Allowed(url) {
+				fmt.Fprintln(stderr, "raijin-fuzz: target is not in scope:", url)
+				return 1
+			}
+			res.Target = url
 		}
-		if !sc.Allowed(*target) {
-			fmt.Fprintln(stderr, "raijin-fuzz: target is not in scope:", *target)
-			return 1
-		}
-		res.Target = *target
 
 		tempRaw := *rawPath == ""
 		if tempRaw {
@@ -122,8 +168,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		defer stop()
 		var stderrTail string
 		fr, stderrTail, err = ffuf.Fuzz(ctx, ffuf.Options{
-			Binary: *bin, URL: *target, Wordlist: *wordlist, Rate: *rate, Threads: *threads, Timeout: *timeout,
-			Extra: fs.Args(), RawPath: *rawPath,
+			Binary: *bin, URL: url, Wordlist: words, Rate: *rate, Threads: *threads, Timeout: *timeout,
+			Extra: extra, RawPath: *rawPath,
 		})
 		switch {
 		case errors.Is(err, ffuf.ErrNotFound):

@@ -47,6 +47,7 @@ You also need `ffuf` on `PATH`, or pass `--ffuf <path>`.
 ## Usage
 
 ```bash
+raijin-fuzz --scope scope.txt                                  # fuzz every host the scope names
 raijin-fuzz --scope scope.txt -u https://app.example.com/FUZZ -w words.txt
 raijin-fuzz --scope scope.txt -u https://app.example.com/FUZZ -w words.txt --rate 50 --threads 10
 raijin-fuzz --scope scope.txt --input ffuf-results.json          # reduce output you already have (-of json or -json)
@@ -62,6 +63,8 @@ example.com
 10.0.0.0/24
 !admin.example.com
 ```
+
+With no `-u` or `--input`, raijin-fuzz fuzzes `https://<host>/FUZZ` for what the scope names: every domain, every IP, and every address of ranges up to a /24, minus exclusions, in one ffuf run with a second keyword (inputs read `FUZZ=admin HOST=example.com`). With no `-w` either, the wordlist is SecLists' `Discovery/Web-Content/common.txt` when it is found (`/usr/share/seclists`, `/usr/share/SecLists`, `/opt/SecLists`, `~/SecLists` or `~/tools/SecLists`), or else a built-in list of 100 common paths ([internal/ffuf/common.txt](internal/ffuf/common.txt)). A wildcard names no host and a larger range is too big to sweep blindly, so for each one `next` gives the command that enumerates it first (`raijin-subs` or `raijin-ports`).
 
 A URL outside the scope is refused before ffuf runs (exit 1). Results outside the scope (a recursion that left the host) are dropped from the output and counted in `omitted.out_of_scope`.
 
@@ -172,7 +175,7 @@ The Raijin banner is **off by default**, so normal runs stay small. `--banner` p
 | Flag | Default | |
 |---|---|---|
 | `--scope` | (required) | scope file |
-| `-u` / `-w` / `--input` | | URL with `FUZZ` / wordlist / existing ffuf JSON file or `-json` stream |
+| `-u` / `-w` / `--input` | `https://<host>/FUZZ` for every host the scope names / SecLists `common.txt`, else a built-in list | URL with `FUZZ` / wordlist / existing ffuf JSON file or `-json` stream |
 | `--noise` | 5 | inputs with the same shape that make it noise (a group) |
 | `--rate`, `--threads`, `--timeout` | | ffuf `-rate` / `-t` / `-timeout` |
 | `--max-items` | 0 | max findings (0 keeps all) |

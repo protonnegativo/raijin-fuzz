@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -297,4 +298,47 @@ func tail(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, " | ")
+}
+
+// commonPaths is the wordlist used when no -w is given and SecLists' common.txt is not on the machine:
+// about a hundred common paths, directories and files (common.txt in this package).
+//
+//go:embed common.txt
+var commonPaths []byte
+
+// SecListsCommon are the places SecLists' Discovery/Web-Content/common.txt is looked for, in order.
+var SecListsCommon = []string{
+	"/usr/share/seclists/Discovery/Web-Content/common.txt",
+	"/usr/share/SecLists/Discovery/Web-Content/common.txt",
+	"/opt/SecLists/Discovery/Web-Content/common.txt",
+	"~/SecLists/Discovery/Web-Content/common.txt",
+	"~/tools/SecLists/Discovery/Web-Content/common.txt",
+}
+
+// DefaultWordlist is the wordlist for a run with no -w: SecLists' common.txt when it is found at one of
+// SecListsCommon, or else the embedded list written to a new file in dir. temp is true for that file,
+// which the caller removes.
+func DefaultWordlist(dir string) (path string, temp bool, err error) {
+	home, _ := os.UserHomeDir()
+	for _, p := range SecListsCommon {
+		if strings.HasPrefix(p, "~/") {
+			if home == "" {
+				continue
+			}
+			p = home + p[1:]
+		}
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p, false, nil
+		}
+	}
+	f, err := os.CreateTemp(dir, "raijin-fuzz-words-*.txt")
+	if err != nil {
+		return "", false, err
+	}
+	defer f.Close()
+	if _, err := f.Write(commonPaths); err != nil {
+		os.Remove(f.Name())
+		return "", false, err
+	}
+	return f.Name(), true, nil
 }

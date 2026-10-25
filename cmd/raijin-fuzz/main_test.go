@@ -164,3 +164,43 @@ func TestBudgetIsCountedAndPointsToRaw(t *testing.T) {
 		t.Errorf("stdout = %s", out.String())
 	}
 }
+
+// With only --scope, every host the scope names is fuzzed in one ffuf run, with the default wordlist,
+// and wildcards get a next step.
+func TestScopeAloneFuzzesWhatTheScopeNames(t *testing.T) {
+	dir := t.TempDir()
+	scopePath := filepath.Join(dir, "scope.txt")
+	if err := os.WriteFile(scopePath, []byte("example.com\n*.example.com\n10.0.0.0/30\n!10.0.0.1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gotHosts, gotArgs := filepath.Join(dir, "hosts.txt"), filepath.Join(dir, "args.txt")
+	fake := filepath.Join(dir, "ffuf")
+	script := "#!/bin/sh\necho \"$@\" > " + gotArgs + "\nwhile [ $# -gt 0 ]; do\n" +
+		"  case \"$2\" in *:HOST) cp \"${2%:HOST}\" " + gotHosts + ";; esac\n" +
+		"  [ \"$1\" = -o ] && echo '{\"results\":[],\"config\":{\"url\":\"https://HOST/FUZZ\"}}' > \"$2\"\n  shift\ndone\n"
+	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopePath, "--ffuf", fake, "--raw", filepath.Join(dir, "raw.json")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, errb.String(), out.String())
+	}
+	b, err := os.ReadFile(gotHosts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(strings.Fields(string(b)), ",") != "example.com,10.0.0.0,10.0.0.2,10.0.0.3" {
+		t.Errorf("ffuf got hosts %q", b)
+	}
+	a, _ := os.ReadFile(gotArgs)
+	if !strings.HasPrefix(string(a), "-u https://HOST/FUZZ -w ") || !strings.Contains(string(a), ":FUZZ ") {
+		t.Errorf("ffuf args = %q", a)
+	}
+	var res struct{ Next []string }
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Next) != 1 || !strings.Contains(res.Next[0], "raijin-subs --scope "+scopePath+" -d example.com") {
+		t.Errorf("next = %v", res.Next)
+	}
+}
