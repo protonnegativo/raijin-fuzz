@@ -10,58 +10,27 @@
 // next requests.
 package schema
 
-import (
-	"bytes"
-	"encoding/json"
+import core "github.com/protonnegativo/raijin-core/schema"
+
+// The envelope (the Result object, Error, Budget, Marshal and the rank tables) is in raijin-core, shared
+// by every Raijin tool. Findings and groups stay here: their fields are what this tool tells an agent.
+type (
+	// Result is the top-level object raijin-fuzz writes to stdout. URL is the URL ffuf fuzzed, with its
+	// keywords (FUZZ), left out when it is the target; Match and Filter are ffuf's matchers and filters
+	// ("status 200-299,301"), left out when ffuf ran with its default matcher and no filter.
+	Result = core.Result[Finding, Group]
+	Error  = core.Error
+	Budget = core.Budget
 )
 
-// Marshal is json.Marshal without HTML escaping: "&" in a URL stays "&" instead of "&", which costs
-// tokens and nothing else.
-func Marshal(v any) ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
-}
-
-// Result is the top-level object a Raijin tool writes to stdout.
-type Result struct {
-	Tool    string `json:"tool"`
-	Version string `json:"version"`
-	Target  string `json:"target"`
-	Summary string `json:"summary"`
-	// URL is the URL ffuf fuzzed, with its keywords (FUZZ): an input is put in place of the keyword to
-	// get the URL of a result. It is left out when it is the target.
-	URL string `json:"url,omitempty"`
-	// Match and Filter are ffuf's matchers and filters ("status 200-299,301"), left out when ffuf ran
-	// with its default matcher and no filter.
-	Match    string         `json:"match,omitempty"`
-	Filter   string         `json:"filter,omitempty"`
-	Findings []Finding      `json:"findings"`
-	Groups   []Group        `json:"groups"`
-	Omitted  map[string]int `json:"omitted,omitempty"`
-	Errors   []Error        `json:"errors,omitempty"`
-	Next     []string       `json:"next,omitempty"`
-	// Raw is the file with the engine's full output, for details the result leaves out.
-	Raw    string `json:"raw,omitempty"`
-	Budget Budget `json:"budget"`
-}
-
-// MarshalJSON writes the budget only when something was cut.
-func (r Result) MarshalJSON() ([]byte, error) {
-	type plain Result
-	out := struct {
-		plain
-		Budget *Budget `json:"budget,omitempty"`
-	}{plain: plain(r)}
-	if r.Budget.Truncated {
-		out.Budget = &r.Budget
-	}
-	return Marshal(out)
-}
+var (
+	// Marshal is json.Marshal without HTML escaping.
+	Marshal = core.Marshal
+	// SeverityRank orders severities from most to least important.
+	SeverityRank = core.SeverityRank
+	// ConfidenceRank orders confidence values: verified, then matched, then heuristic.
+	ConfidenceRank = core.ConfidenceRank
+)
 
 // Shape is what a set of inputs answered: every input of a finding or group got this exact response
 // shape. Status, length, words and lines are always written (0 is a real value).
@@ -114,34 +83,4 @@ type Group struct {
 	// Count is the number of inputs; it is set only when the budget cut Inputs.
 	Count int `json:"count,omitempty"`
 	N     int `json:"-"`
-}
-
-// Error is a problem during the run, with a hint about what to try next.
-type Error struct {
-	Kind string `json:"kind"`
-	Hint string `json:"hint"`
-}
-
-// Budget reports the output limits that were applied.
-type Budget struct {
-	MaxItems  int  `json:"max_items"`
-	MaxBytes  int  `json:"max_bytes"`
-	Truncated bool `json:"truncated"`
-}
-
-// SeverityRank orders severities from most to least important.
-var SeverityRank = map[string]int{
-	"critical": 5,
-	"high":     4,
-	"medium":   3,
-	"low":      2,
-	"info":     1,
-	"unknown":  0,
-}
-
-// ConfidenceRank orders confidence values: a verified finding before a matched one before a heuristic one.
-var ConfidenceRank = map[string]int{
-	"verified":  2,
-	"":          1,
-	"heuristic": 0,
 }

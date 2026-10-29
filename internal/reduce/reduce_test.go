@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/protonnegativo/raijin-core/scope"
 	"github.com/protonnegativo/raijin-fuzz/internal/ffuf"
 	"github.com/protonnegativo/raijin-fuzz/internal/schema"
-	"github.com/protonnegativo/raijin-fuzz/internal/scope"
 )
 
 const tmpl = "http://h.test/FUZZ"

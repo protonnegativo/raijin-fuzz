@@ -54,6 +54,15 @@ func TestBuildVersion(t *testing.T) {
 	}
 }
 
+func TestReleaseVersionWins(t *testing.T) {
+	releaseVersion = "v9.9.9"
+	defer func() { releaseVersion = "" }()
+	info := &debug.BuildInfo{Main: debug.Module{Version: "v0.1.3"}}
+	if got := buildVersion(info, true); got != "v9.9.9" {
+		t.Errorf("buildVersion = %q, want the release version", got)
+	}
+}
+
 func TestVersionLine(t *testing.T) {
 	tested, _ := testedFfuf(t)
 	var out, errb bytes.Buffer
@@ -314,5 +323,109 @@ func TestEngineFormatIsCounted(t *testing.T) {
 	if res.Omitted["unparsed"] != 21 || len(res.Errors) != 1 || res.Errors[0].Kind != "engine_format" ||
 		!strings.HasPrefix(res.Errors[0].Hint, "21 of 21 ffuf results had no url or status") {
 		t.Errorf("omitted %v, errors %v", res.Omitted, res.Errors)
+	}
+}
+
+func TestSchemaVersionIsTheFirstField(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopeFile(t), "--input", "../../testdata/sample.json"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.HasPrefix(out.String(), `{"schema_version":1,"tool":"raijin-fuzz",`) {
+		t.Errorf("output must start with schema_version: %.80s", out.String())
+	}
+}
+
+func TestInvalidScopeIsStructuredAndRunsNothing(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ffuf-ran")
+	fake := filepath.Join(dir, "ffuf")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]struct{ file, reason string }{
+		"port in rule":        {"example.com:443\n", "port in rule"},
+		"CIDR with host bits": {"10.0.0.7/24\n", "CIDR has host bits set"},
+		"two bad lines":       {"example.com:443\n*example.com\n", "line 2"},
+	}
+	for name, c := range cases {
+		p := filepath.Join(dir, "scope.txt")
+		if err := os.WriteFile(p, []byte(c.file), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{
+			{"--scope", p, "-u", "https://example.com/FUZZ", "-w", "w.txt", "--ffuf", fake},
+			{"--scope", p, "--ffuf", fake},
+		} {
+			var out, errb bytes.Buffer
+			if code := run(args, &out, &errb); code != 2 {
+				t.Errorf("%s: exit %d, want 2", name, code)
+			}
+			if !strings.HasPrefix(out.String(), `{"schema_version":1,`) {
+				t.Errorf("%s: stdout must start with the schema_version: %.60s", name, out.String())
+			}
+			// --format table must not turn the structured error into text
+			var tab, tabErr bytes.Buffer
+			if code := run(append([]string{"--format", "table"}, args...), &tab, &tabErr); code != 2 || !strings.HasPrefix(tab.String(), `{"schema_version":1,`) {
+				t.Errorf("%s: --format table: exit %d, stdout %.60s", name, code, tab.String())
+			}
+			var v struct {
+				SchemaVersion int `json:"schema_version"`
+				Summary       string
+				Errors        []struct{ Kind, Hint string }
+			}
+			if err := json.Unmarshal(out.Bytes(), &v); err != nil {
+				t.Fatalf("%s: stdout is not JSON: %v: %q", name, err, out.String())
+			}
+			if v.SchemaVersion != 1 || len(v.Errors) == 0 || v.Errors[0].Kind != "scope" || !strings.Contains(out.String(), c.reason) {
+				t.Errorf("%s: want kind scope mentioning %q, got %s", name, c.reason, out.String())
+			}
+			if !strings.Contains(v.Summary, "nothing fuzzed") {
+				t.Errorf("%s: summary %q", name, v.Summary)
+			}
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("ffuf ran with an invalid scope")
+	}
+	// a scope file that cannot be read is also a structured error
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", filepath.Join(dir, "missing.txt")}, &out, &errb); code != 2 || !strings.Contains(out.String(), `"kind":"scope"`) {
+		t.Errorf("missing scope file: exit %d: %s", code, out.String())
+	}
+}
+
+func TestStateMarksNewOnlyOnce(t *testing.T) {
+	st := filepath.Join(t.TempDir(), "state.json")
+	args := []string{"--scope", scopeFile(t), "--input", "../../testdata/sample.json", "--state", st}
+	var first, second, errb bytes.Buffer
+	if code := run(args, &first, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(first.String(), `"new":true`) {
+		t.Errorf("first run should mark findings as new: %s", first.String())
+	}
+	if code := run(args, &second, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if strings.Contains(second.String(), `"new":true`) {
+		t.Errorf("second run should not mark anything as new: %s", second.String())
+	}
+}
+
+func TestScopeWithoutHostsIsStructuredExitTwo(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "scope.txt")
+	if err := os.WriteFile(p, []byte("*.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--scope", p}, {"--format", "table", "--scope", p}} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 2 {
+			t.Errorf("%v: exit %d, want 2", args, code)
+		}
+		s := out.String()
+		if !strings.HasPrefix(s, `{"schema_version":1,`) || !strings.Contains(s, `"kind":"no_targets"`) || !strings.Contains(s, "raijin-subs") {
+			t.Errorf("%v: stdout %.200s", args, s)
+		}
 	}
 }

@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,24 +13,33 @@ import (
 	"runtime/debug"
 	"strings"
 
+	coreschema "github.com/protonnegativo/raijin-core/schema"
+	"github.com/protonnegativo/raijin-core/scope"
+	"github.com/protonnegativo/raijin-core/state"
 	"github.com/protonnegativo/raijin-fuzz"
 	"github.com/protonnegativo/raijin-fuzz/internal/banner"
 	"github.com/protonnegativo/raijin-fuzz/internal/ffuf"
 	"github.com/protonnegativo/raijin-fuzz/internal/reduce"
 	"github.com/protonnegativo/raijin-fuzz/internal/schema"
-	"github.com/protonnegativo/raijin-fuzz/internal/scope"
-	"github.com/protonnegativo/raijin-fuzz/internal/state"
 )
 
-// version is the release the binary was installed as (go install ...@vX.Y.Z or @latest), or dev plus
-// the VCS revision for a local build.
+// releaseVersion is set at link time by the release build (-ldflags "-X main.releaseVersion=vX.Y.Z"). It
+// must be a variable without an initializer: -X ignores one that is set by a function call.
+var releaseVersion string
+
+// version is the release the binary was built as (releaseVersion), installed as (go install
+// ...@vX.Y.Z or @latest), or dev plus the VCS revision for a local build.
 var version = buildVersion(debug.ReadBuildInfo())
 
 var pseudoRe = regexp.MustCompile(`-(0\.)?[0-9]{14}-[0-9a-f]{12}(\+dirty)?$`)
 
-// buildVersion returns the module version from the build info when it is a real one, else "dev", with
-// the first 12 characters of vcs.revision and "+dirty" when vcs.modified is true.
+// buildVersion returns releaseVersion when the build set it, else the module version from the build info
+// when it is a real one, else "dev", with the first 12 characters of vcs.revision and "+dirty" when
+// vcs.modified is true.
 func buildVersion(info *debug.BuildInfo, ok bool) string {
+	if releaseVersion != "" {
+		return releaseVersion
+	}
 	if !ok || info == nil {
 		return "dev"
 	}
@@ -116,12 +124,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "raijin-fuzz: --scope is required")
 		return 1
 	}
-	sc, err := scope.Load(*scopeFile)
-	if err != nil {
-		fmt.Fprintln(stderr, "raijin-fuzz: scope:", err)
-		return 1
-	}
-
 	res := schema.Result{
 		Tool:     "raijin-fuzz",
 		Version:  version,
@@ -131,6 +133,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Errors:   []schema.Error{},
 		Next:     []string{},
 		Budget:   schema.Budget{MaxItems: *maxItems, MaxBytes: *maxBytes},
+	}
+
+	sc, err := scope.Load(*scopeFile)
+	if err != nil {
+		// an invalid scope is never a warning: say which lines to fix and run nothing
+		res.Errors = scope.SchemaErrors(err)
+		res.Summary = "invalid scope file, nothing fuzzed"
+		res.Target = *scopeFile
+		// exit 2 means "structured error": the JSON on stdout is the contract, so it is JSON whatever --format says
+		write(stdout, &res, "json", *pretty)
+		return 2
 	}
 
 	var fr *ffuf.Run
@@ -162,8 +175,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if len(hosts) == 0 {
 				res.Summary = "the scope names no single host to fuzz"
 				res.Target = *scopeFile
-				write(stdout, &res, *format, *pretty)
-				return 1
+				res.Errors = append(res.Errors, schema.Error{Kind: "no_targets", Hint: "the scope has no domain or IP to fuzz; follow next, or pass -u <url>/FUZZ"})
+				// structured error: exit 2 with JSON whatever --format says
+				write(stdout, &res, "json", *pretty)
+				return 2
 			}
 			hostList, err := os.CreateTemp("", "raijin-fuzz-hosts-*.txt")
 			if err != nil {
@@ -234,7 +249,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if tempRaw {
 				os.Remove(*rawPath)
 			}
-			write(stdout, &res, *format, *pretty)
+			write(stdout, &res, "json", *pretty) // exit 2: JSON whatever --format says
 			return 2
 		case err != nil:
 			hint := err.Error()
@@ -277,7 +292,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			res.Errors = append(res.Errors, schema.Error{Kind: "state_error", Hint: err.Error()})
 		} else {
-			newCount = st.Mark(res.Findings, out.Inputs)
+			newCount = state.Mark(st, res.Findings, out.Inputs,
+				func(f *schema.Finding) string { return f.Fingerprint },
+				func(f *schema.Finding) { f.New = true })
 			if err := st.Save(*statePath); err != nil {
 				res.Errors = append(res.Errors, schema.Error{Kind: "state_error", Hint: err.Error()})
 			}
@@ -395,12 +412,7 @@ func write(w io.Writer, res *schema.Result, format string, pretty bool) {
 		}
 		return
 	}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	_ = enc.Encode(res)
+	_ = coreschema.Write(w, res, pretty)
 }
 
 // describe is a one-line view of a shape for the table: status, size, words, lines, type, redirect.

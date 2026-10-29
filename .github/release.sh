@@ -3,7 +3,7 @@
 # Usage: .github/release.sh [patch|minor|major] [base-sha]
 # Skips when HEAD already has a tag, or when base-sha is given and the changes since it only touch files
 # that are not in the binary (bench/fixtures/, *.md, docs/, .github/). engines.json does release: the
-# binary embeds it. Needs GH_TOKEN for gh.
+# binary embeds it. Needs GH_TOKEN for gh (with actions: write, to start the binaries workflow).
 set -euo pipefail
 
 bump=${1:-patch}
@@ -40,4 +40,6 @@ git config user.email >/dev/null || git config user.email "41898282+github-actio
 git tag -a "$next" -m "$next"
 git push origin "$next"
 gh release create "$next" --generate-notes --title "$next"
+# A tag and a Release created with GITHUB_TOKEN do not start other workflows: dispatch the binaries one.
+gh workflow run goreleaser.yml -f tag="$next"
 echo "released $next"

@@ -34,8 +34,8 @@ Reproduce: `bench/run.sh` replays the saved runs in `bench/fixtures`. `LIVE=1 be
 | ffuf `-of json` | 70,586 | 23,477 | 1× |
 | ffuf text (stdout+stderr) | 47,769 | 20,004 | 1.2× |
 | ffuf text (stdout) | 22,723 | 9,234 | 2.5× |
-| **raijin-fuzz JSON (default)** | 3,539 | **962** | **24×** |
-| raijin-fuzz `--pretty` | 6,558 | 1,744 | 13× |
+| **raijin-fuzz JSON (default)** | 3,575 | **971** | **24×** |
+| raijin-fuzz `--pretty` | 6,598 | 1,756 | 13× |
 | raijin-fuzz `--format table` | 683 | 232 | 101× |
 
 ## Scenario 2: findings
@@ -53,8 +53,8 @@ Reproduce: `bench/run.sh` replays the saved runs in `bench/fixtures`. `LIVE=1 be
 | ffuf `-of json` | 9,225 | 3,013 | 1× |
 | ffuf `-json` | 7,667 | 2,746 | 1.1× |
 | ffuf text (stdout) | 2,492 | 1,043 | 2.9× |
-| **raijin-fuzz JSON (default)** | 3,037 | **969** | **3.1×** |
-| raijin-fuzz `--pretty` | 5,277 | 1,701 | 1.8× |
+| **raijin-fuzz JSON (default)** | 3,073 | **978** | **3.1×** |
+| raijin-fuzz `--pretty` | 5,317 | 1,713 | 1.8× |
 | raijin-fuzz `--format table` | 1,380 | 455 | 6.6× |
 
 In a live run (not a replay) the raijin-fuzz JSON also has `raw`, the path of ffuf's saved JSON file, and its `target` is the URL (so `url` is left out): a few tokens either way.
@@ -76,8 +76,8 @@ What the JSON leaves out stays in ffuf's JSON file, which raijin-fuzz saves to d
 
 - **Against ffuf's JSON** (`-of json` or `-json`), the structured output an agent would parse, raijin-fuzz uses **24×** (`-json`: 26×) fewer tokens on the noisy run and **3.1×** (`-json`: 2.8×) fewer on the findings run. The gap grows with noise: 223 soft-404s cost one entry and one word each.
 - **Against ffuf's text output**, the result depends on the run and on stderr:
-  - noisy: **9.6× smaller** than stdout alone (9,234 → 962) and **21× smaller** than stdout plus stderr;
-  - findings: **7% smaller** than stdout alone (1,043 → 969) and **3.3× smaller** than stdout plus stderr.
+  - noisy: **9.5× smaller** than stdout alone (9,234 → 971) and **21× smaller** than stdout plus stderr;
+  - findings: **6% smaller** than stdout alone (1,043 → 978) and **3.3× smaller** than stdout plus stderr.
 
   When every response is different there is little to collapse, and raijin-fuzz's IDs, severities and tags cost about what the escape codes and column padding of the text lines cost. In exchange the agent gets what the text does not have at all: the content type and the redirect of each result (`/admin` → `/FUZZ/` is a directory, `/dashboard` → `/login` is behind a login), the findings ranked, and on the noisy run the soft-404s already separated from the real paths. The text reports `.env`, `.git/HEAD` and `backup.zip` the same way: one line each with a status 200 and a size.
 - **The output stays bounded.** On a run too big for `--max-bytes`, raijin-fuzz cuts the least important data first: group inputs, then groups, then extra inputs of low-ranked findings, then low-ranked findings. Every cut is counted in `omitted`, and `next` points to the raw file. Raw ffuf output has no upper bound.
@@ -89,6 +89,6 @@ One change before the numbers above, measured on the same fixtures (o200k tokens
 | Tags | Scenario 1 | Scenario 2 |
 |---|---:|---:|
 | Status class as a tag too (`ok`, `redirect`, `auth`, `client`, `error`) | 985 | 1,027 |
-| **Only what the status does not say** (`file`, `admin`, `dir`, `slow`; current) | **962** | **969** |
+| **Only what the status does not say** (`file`, `admin`, `dir`, `slow`; current) | **971** | **978** |
 
-The status class is derivable from `status`, so it was dropped from `tags`.
+The status class is derivable from `status`, so it was dropped from `tags`. The first row was measured before the `schema_version` field was added; the current row includes it (9 tokens on each scenario).
