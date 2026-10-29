@@ -141,8 +141,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		res.Errors = scope.SchemaErrors(err)
 		res.Summary = "invalid scope file, nothing fuzzed"
 		res.Target = *scopeFile
-		write(stdout, &res, *format, *pretty)
-		return 1
+		// exit 2 means "structured error": the JSON on stdout is the contract, so it is JSON whatever --format says
+		write(stdout, &res, "json", *pretty)
+		return 2
 	}
 
 	var fr *ffuf.Run
@@ -246,7 +247,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if tempRaw {
 				os.Remove(*rawPath)
 			}
-			write(stdout, &res, *format, *pretty)
+			write(stdout, &res, "json", *pretty) // exit 2: JSON whatever --format says
 			return 2
 		case err != nil:
 			hint := err.Error()

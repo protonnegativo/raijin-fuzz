@@ -358,8 +358,16 @@ func TestInvalidScopeIsStructuredAndRunsNothing(t *testing.T) {
 			{"--scope", p, "--ffuf", fake},
 		} {
 			var out, errb bytes.Buffer
-			if code := run(args, &out, &errb); code != 1 {
-				t.Errorf("%s: exit %d, want 1", name, code)
+			if code := run(args, &out, &errb); code != 2 {
+				t.Errorf("%s: exit %d, want 2", name, code)
+			}
+			if !strings.HasPrefix(out.String(), `{"schema_version":1,`) {
+				t.Errorf("%s: stdout must start with the schema_version: %.60s", name, out.String())
+			}
+			// --format table must not turn the structured error into text
+			var tab, tabErr bytes.Buffer
+			if code := run(append([]string{"--format", "table"}, args...), &tab, &tabErr); code != 2 || !strings.HasPrefix(tab.String(), `{"schema_version":1,`) {
+				t.Errorf("%s: --format table: exit %d, stdout %.60s", name, code, tab.String())
 			}
 			var v struct {
 				SchemaVersion int `json:"schema_version"`
@@ -382,7 +390,7 @@ func TestInvalidScopeIsStructuredAndRunsNothing(t *testing.T) {
 	}
 	// a scope file that cannot be read is also a structured error
 	var out, errb bytes.Buffer
-	if code := run([]string{"--scope", filepath.Join(dir, "missing.txt")}, &out, &errb); code != 1 || !strings.Contains(out.String(), `"kind":"scope"`) {
+	if code := run([]string{"--scope", filepath.Join(dir, "missing.txt")}, &out, &errb); code != 2 || !strings.Contains(out.String(), `"kind":"scope"`) {
 		t.Errorf("missing scope file: exit %d: %s", code, out.String())
 	}
 }
