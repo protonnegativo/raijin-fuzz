@@ -54,6 +54,15 @@ func TestBuildVersion(t *testing.T) {
 	}
 }
 
+func TestReleaseVersionWins(t *testing.T) {
+	releaseVersion = "v9.9.9"
+	defer func() { releaseVersion = "" }()
+	info := &debug.BuildInfo{Main: debug.Module{Version: "v0.1.3"}}
+	if got := buildVersion(info, true); got != "v9.9.9" {
+		t.Errorf("buildVersion = %q, want the release version", got)
+	}
+}
+
 func TestVersionLine(t *testing.T) {
 	tested, _ := testedFfuf(t)
 	var out, errb bytes.Buffer

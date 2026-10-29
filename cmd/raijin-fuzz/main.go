@@ -23,15 +23,23 @@ import (
 	"github.com/protonnegativo/raijin-fuzz/internal/schema"
 )
 
-// version is the release the binary was installed as (go install ...@vX.Y.Z or @latest), or dev plus
-// the VCS revision for a local build.
+// releaseVersion is set at link time by the release build (-ldflags "-X main.releaseVersion=vX.Y.Z"). It
+// must be a variable without an initializer: -X ignores one that is set by a function call.
+var releaseVersion string
+
+// version is the release the binary was built as (releaseVersion), installed as (go install
+// ...@vX.Y.Z or @latest), or dev plus the VCS revision for a local build.
 var version = buildVersion(debug.ReadBuildInfo())
 
 var pseudoRe = regexp.MustCompile(`-(0\.)?[0-9]{14}-[0-9a-f]{12}(\+dirty)?$`)
 
-// buildVersion returns the module version from the build info when it is a real one, else "dev", with
-// the first 12 characters of vcs.revision and "+dirty" when vcs.modified is true.
+// buildVersion returns releaseVersion when the build set it, else the module version from the build info
+// when it is a real one, else "dev", with the first 12 characters of vcs.revision and "+dirty" when
+// vcs.modified is true.
 func buildVersion(info *debug.BuildInfo, ok bool) string {
+	if releaseVersion != "" {
+		return releaseVersion
+	}
 	if !ok || info == nil {
 		return "dev"
 	}
