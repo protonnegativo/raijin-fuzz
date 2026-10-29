@@ -18,14 +18,14 @@ Here is the same run, with the same results, read by an agent (tokens, `o200k_ba
 
 ```
 Noisy run: a catch-all soft-404, 242 words, 242 results
-  raijin-fuzz          ▊                         962 tokens
+  raijin-fuzz          ▊                         971 tokens
   ffuf text            ███████▍                9,234 tokens
   ffuf text + stderr   ███████████████▉       20,004 tokens
   ffuf -of json        ██████████████████▋    23,477 tokens
   ffuf -json           ████████████████████   25,154 tokens
 
 Findings run: a normal site, 27 results, 20 findings (7 high, 3 medium, 5 low, 5 info)
-  raijin-fuzz          ██████                    969 tokens
+  raijin-fuzz          ██████                    978 tokens
   ffuf text            ██████▌                 1,043 tokens
   ffuf text + stderr   ████████████████████    3,213 tokens
   ffuf -of json        ██████████████████▊     3,013 tokens
@@ -40,7 +40,7 @@ raijin-fuzz reads **24×** fewer tokens than ffuf's JSON file (`-of json`) on th
 - **Output is bounded.** On a huge run, `--max-bytes` cuts the least important data first and counts every cut. ffuf's output grows with every result.
 - **Details are one file away.** ffuf's full JSON file is saved to disk, and its path is in `raw`. It holds the config, the full URL of each result, the durations and ffuf's hashes, costs no tokens until the agent opens it, and replays with `--input`.
 
-Against ffuf's text output (stdout only, what an agent gets with `2>/dev/null`), raijin-fuzz is **9.6×** smaller on the noisy run and **7%** smaller on the findings run: when every response is different there is little to collapse, and the IDs, severities and tags cost about what the escape codes and padding of the text lines cost. In exchange the agent gets the content type and redirect of each result (the text has neither), the findings ranked, and the soft-404s already separated from the real paths. Full method and numbers are in [BENCHMARK.md](BENCHMARK.md), and `bench/run.sh` reproduces them.
+Against ffuf's text output (stdout only, what an agent gets with `2>/dev/null`), raijin-fuzz is **9.5×** smaller on the noisy run and **6%** smaller on the findings run: when every response is different there is little to collapse, and the IDs, severities and tags cost about what the escape codes and padding of the text lines cost. In exchange the agent gets the content type and redirect of each result (the text has neither), the findings ranked, and the soft-404s already separated from the real paths. Full method and numbers are in [BENCHMARK.md](BENCHMARK.md), and `bench/run.sh` reproduces them.
 
 ## Install
 
@@ -74,7 +74,7 @@ example.com
 
 With no `-u` or `--input`, raijin-fuzz fuzzes `https://<host>/FUZZ` for what the scope names: every domain, every IP, and every address of ranges up to a /24, minus exclusions, in one ffuf run with a second keyword (inputs read `FUZZ=admin HOST=example.com`). With no `-w` either, the wordlist is SecLists' `Discovery/Web-Content/common.txt` when it is found (`/usr/share/seclists`, `/usr/share/SecLists`, `/opt/SecLists`, `~/SecLists` or `~/tools/SecLists`), or else a built-in list of 100 common paths ([internal/ffuf/common.txt](internal/ffuf/common.txt)). A wildcard names no host and a larger range is too big to sweep blindly, so for each one `next` gives the command that enumerates it first (`raijin-subs` or `raijin-ports`).
 
-A URL outside the scope is refused before ffuf runs (exit 1). Results outside the scope (a recursion that left the host) are dropped from the output and counted in `omitted.out_of_scope`.
+A URL outside the scope is refused before ffuf runs (exit 1, a usage error). Results outside the scope (a recursion that left the host) are dropped from the output and counted in `omitted.out_of_scope`.
 
 **Matchers.** raijin-fuzz adds no matcher, filter or calibration of its own: without `--` options, ffuf runs with its default matcher, `-mc 200-299,301,302,307,401,403,405,500`, and every result it matched is in the output. A 404 that ffuf did not match is not a result, as in ffuf. When ffuf ran with any other matcher or a filter (`-- -mc all`, `-- -fs 42`, `-- -ac`), the result says so in `match` and `filter`, because those decide what ffuf reported. raijin-fuzz does not need `-ac` to separate the noise, and it does not hide which inputs got it.
 
@@ -84,6 +84,7 @@ A URL outside the scope is refused before ffuf runs (exit 1). Results outside th
 
 ```json
 {
+  "schema_version": 1,
   "tool": "raijin-fuzz",
   "version": "0.1.0",
   "target": "bench/fixtures/noisy/raw.json",
@@ -163,6 +164,9 @@ What the reducer does:
 
   Every cut is counted in `omitted`, `budget.truncated` is set, and `next` points to the raw file. `--max-items` caps the number of findings (0, the default, keeps all).
 - **Errors** say what to try next. If ffuf is missing, the exit code is 2.
+- **`schema_version`** is the first field (currently `1`); it changes only when the Raijin Schema changes in a way that breaks readers.
+- **Invalid scope.** A scope file with bad lines runs nothing and returns `errors` with `kind:"scope"`, one error per invalid line, each `hint` starting with `line N:`, and exit code 2. Like a missing ffuf, it is JSON on stdout even with `--format table`.
+- **Exit codes:** `0` ok; `2` a structured error, with the JSON result on stdout (invalid scope, missing engine): tell them apart by `errors[].kind`; `1` wrong usage (bad flag, missing `--scope` or `-w`, a URL outside the scope), with the message on stderr and no JSON to rely on.
 
 Fields an agent can rebuild are left out to save tokens:
 
@@ -208,7 +212,7 @@ bench/run.sh            # replay bench/fixtures and count tokens
 LIVE=1 bench/run.sh     # start the local lab, fuzz it again, refresh the fixtures
 ```
 
-Standard library only. ffuf runs as a subprocess with `-of json -o <raw> -noninteractive`, so the binary stays small and ffuf can be updated on its own. Its text output is discarded; its stdin is `/dev/null`.
+The only dependency is [raijin-core](https://github.com/protonnegativo/raijin-core) (scope, schema envelope, state); everything else is the standard library. ffuf runs as a subprocess with `-of json -o <raw> -noninteractive`, so the binary stays small and ffuf can be updated on its own. Its text output is discarded; its stdin is `/dev/null`.
 
 ## Responsible use
 
