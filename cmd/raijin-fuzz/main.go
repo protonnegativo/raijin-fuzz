@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,13 +13,14 @@ import (
 	"runtime/debug"
 	"strings"
 
+	coreschema "github.com/protonnegativo/raijin-core/schema"
+	"github.com/protonnegativo/raijin-core/scope"
+	"github.com/protonnegativo/raijin-core/state"
 	"github.com/protonnegativo/raijin-fuzz"
 	"github.com/protonnegativo/raijin-fuzz/internal/banner"
 	"github.com/protonnegativo/raijin-fuzz/internal/ffuf"
 	"github.com/protonnegativo/raijin-fuzz/internal/reduce"
 	"github.com/protonnegativo/raijin-fuzz/internal/schema"
-	"github.com/protonnegativo/raijin-fuzz/internal/scope"
-	"github.com/protonnegativo/raijin-fuzz/internal/state"
 )
 
 // version is the release the binary was installed as (go install ...@vX.Y.Z or @latest), or dev plus
@@ -116,12 +116,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "raijin-fuzz: --scope is required")
 		return 1
 	}
-	sc, err := scope.Load(*scopeFile)
-	if err != nil {
-		fmt.Fprintln(stderr, "raijin-fuzz: scope:", err)
-		return 1
-	}
-
 	res := schema.Result{
 		Tool:     "raijin-fuzz",
 		Version:  version,
@@ -131,6 +125,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Errors:   []schema.Error{},
 		Next:     []string{},
 		Budget:   schema.Budget{MaxItems: *maxItems, MaxBytes: *maxBytes},
+	}
+
+	sc, err := scope.Load(*scopeFile)
+	if err != nil {
+		// an invalid scope is never a warning: say which lines to fix and run nothing
+		res.Errors = scope.SchemaErrors(err)
+		res.Summary = "invalid scope file, nothing fuzzed"
+		res.Target = *scopeFile
+		write(stdout, &res, *format, *pretty)
+		return 1
 	}
 
 	var fr *ffuf.Run
@@ -277,7 +281,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			res.Errors = append(res.Errors, schema.Error{Kind: "state_error", Hint: err.Error()})
 		} else {
-			newCount = st.Mark(res.Findings, out.Inputs)
+			newCount = state.Mark(st, res.Findings, out.Inputs,
+				func(f *schema.Finding) string { return f.Fingerprint },
+				func(f *schema.Finding) { f.New = true })
 			if err := st.Save(*statePath); err != nil {
 				res.Errors = append(res.Errors, schema.Error{Kind: "state_error", Hint: err.Error()})
 			}
@@ -395,12 +401,7 @@ func write(w io.Writer, res *schema.Result, format string, pretty bool) {
 		}
 		return
 	}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	_ = enc.Encode(res)
+	_ = coreschema.Write(w, res, pretty)
 }
 
 // describe is a one-line view of a shape for the table: status, size, words, lines, type, redirect.
