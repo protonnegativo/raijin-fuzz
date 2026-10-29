@@ -62,7 +62,7 @@ jobs:
           [ "$rc" = 0 ] || { echo "bench/run.sh exited $rc" >> "$RUNNER_TEMP/verify.txt"; exit 1; }
           [ -s "$RUNNER_TEMP/verify.txt" ] || { echo "no verify lines" >> "$RUNNER_TEMP/verify.txt"; exit 1; }
           ! grep -qE '[1-9][0-9]* missing from output|engine_format' "$RUNNER_TEMP/verify.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: live-bench
