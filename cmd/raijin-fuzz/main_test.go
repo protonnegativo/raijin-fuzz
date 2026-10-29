@@ -412,3 +412,20 @@ func TestStateMarksNewOnlyOnce(t *testing.T) {
 		t.Errorf("second run should not mark anything as new: %s", second.String())
 	}
 }
+
+func TestScopeWithoutHostsIsStructuredExitTwo(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "scope.txt")
+	if err := os.WriteFile(p, []byte("*.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--scope", p}, {"--format", "table", "--scope", p}} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 2 {
+			t.Errorf("%v: exit %d, want 2", args, code)
+		}
+		s := out.String()
+		if !strings.HasPrefix(s, `{"schema_version":1,`) || !strings.Contains(s, `"kind":"no_targets"`) || !strings.Contains(s, "raijin-subs") {
+			t.Errorf("%v: stdout %.200s", args, s)
+		}
+	}
+}

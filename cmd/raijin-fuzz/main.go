@@ -175,8 +175,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if len(hosts) == 0 {
 				res.Summary = "the scope names no single host to fuzz"
 				res.Target = *scopeFile
-				write(stdout, &res, *format, *pretty)
-				return 1
+				res.Errors = append(res.Errors, schema.Error{Kind: "no_targets", Hint: "the scope has no domain or IP to fuzz; follow next, or pass -u <url>/FUZZ"})
+				// structured error: exit 2 with JSON whatever --format says
+				write(stdout, &res, "json", *pretty)
+				return 2
 			}
 			hostList, err := os.CreateTemp("", "raijin-fuzz-hosts-*.txt")
 			if err != nil {

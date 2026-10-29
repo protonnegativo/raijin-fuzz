@@ -166,7 +166,7 @@ What the reducer does:
 - **Errors** say what to try next. If ffuf is missing, the exit code is 2.
 - **`schema_version`** is the first field (currently `1`); it changes only when the Raijin Schema changes in a way that breaks readers.
 - **Invalid scope.** A scope file with bad lines runs nothing and returns `errors` with `kind:"scope"`, one error per invalid line, each `hint` starting with `line N:`, and exit code 2. Like a missing ffuf, it is JSON on stdout even with `--format table`.
-- **Exit codes:** `0` ok; `2` a structured error, with the JSON result on stdout (invalid scope, missing engine): tell them apart by `errors[].kind`; `1` wrong usage (bad flag, missing `--scope` or `-w`, a URL outside the scope), with the message on stderr and no JSON to rely on.
+- **Exit codes:** `0` ok; `2` a structured error, with the JSON result on stdout (invalid scope, a scope that names no host to fuzz, missing engine): tell them apart by `errors[].kind`; `1` wrong usage (bad flag, missing `--scope` or `-w`, a URL outside the scope), with the message on stderr and no JSON to rely on.
 
 Fields an agent can rebuild are left out to save tokens:
 
