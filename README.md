@@ -1,5 +1,11 @@
 # ⚡ Raijin Fuzz
 
+[![CI](https://github.com/protonnegativo/raijin-fuzz/actions/workflows/ci.yml/badge.svg)](https://github.com/protonnegativo/raijin-fuzz/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/protonnegativo/raijin-fuzz)](https://github.com/protonnegativo/raijin-fuzz/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/protonnegativo/raijin-fuzz)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/protonnegativo/raijin-fuzz.svg)](https://pkg.go.dev/github.com/protonnegativo/raijin-fuzz)
+[![Go Report Card](https://goreportcard.com/badge/github.com/protonnegativo/raijin-fuzz)](https://goreportcard.com/report/github.com/protonnegativo/raijin-fuzz)
+
 **ffuf for AI agents: only responses that differ from the baseline (status, size, words, timing), with every input still listed and soft-404s collapsed into one group.**
 
 `raijin-fuzz` is a tool of **Raijin**, an arsenal of offensive security tools built for AI agents. It runs [ffuf](https://github.com/ffuf/ffuf) underneath and returns the **Raijin Schema**: one compact JSON where results with the same response shape (status, size, words, lines) share one entry that lists every input, the shapes many inputs got (a soft-404, a catch-all page, a WAF block) are groups, and the shapes that differ from them are ranked findings: a `.git/HEAD` or a backup that answered 200 first, then 401/403, then redirects, errors and slow answers. Anything it had to cut is counted.
