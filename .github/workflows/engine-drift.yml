@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write # release.sh starts goreleaser.yml
 
 jobs:
   drift:
